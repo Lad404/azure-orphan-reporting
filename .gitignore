@@ -1,0 +1,7 @@
+bin/
+obj/
+local.settings.json
+.vscode/
+*.user
+*.ps1xml
+outputs/

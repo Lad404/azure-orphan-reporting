@@ -1,0 +1,5 @@
+resources
+| where type == "microsoft.network/frontdoorwebapplicationfirewallpolicies"
+| where properties.securityPolicyLinks == "[]"
+| extend Details = pack_all()
+| project Resource=id, resourceGroup, location, subscriptionId, Sku=sku.name, tags, Details

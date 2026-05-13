@@ -1,0 +1,6 @@
+Resources
+| where type =~ 'Microsoft.Compute/availabilitySets'
+| where properties.virtualMachines == "[]"
+| where not(name endswith "-asr")
+| extend Details = pack_all()
+| project subscriptionId, Resource=id, resourceGroup, location, tags, Details

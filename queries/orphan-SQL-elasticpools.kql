@@ -1,0 +1,10 @@
+resources
+| where type =~ 'microsoft.sql/servers/elasticpools'
+| project elasticPoolId = tolower(id), Resource = id, resourceGroup, location, subscriptionId, tags, properties, Details = pack_all()
+| join kind=leftouter (resources
+| where type =~ 'Microsoft.Sql/servers/databases'
+| project id, properties
+| extend elasticPoolId = tolower(properties.elasticPoolId)) on elasticPoolId
+| summarize databaseCount = countif(id != '') by Resource, resourceGroup, location, subscriptionId, tostring(tags), tostring(Details)
+| where databaseCount == 0
+| project-away databaseCount

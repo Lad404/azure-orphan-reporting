@@ -1,0 +1,5 @@
+Resources
+| where type == "microsoft.network/publicipaddresses"
+| where properties.ipConfiguration == "" and properties.natGateway == "" and properties.publicIPPrefix == ""
+| extend Details = pack_all()
+| project subscriptionId, Resource=id, resourceGroup, location, Type=tostring(sku.name), AllocationMethod=tostring(properties.publicIPAllocationMethod), tags, Details

@@ -1,0 +1,5 @@
+resources
+| where type == "microsoft.network/ddosprotectionplans"
+| where isnull(properties.virtualNetworks)
+| extend Details = pack_all()
+| project subscriptionId, Resource=id, resourceGroup, location, tags, Details

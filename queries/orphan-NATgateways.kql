@@ -1,0 +1,5 @@
+resources
+| where type == "microsoft.network/natgateways"
+| where isnull(properties.subnets)
+| extend Details = pack_all()
+| project subscriptionId, Resource=id, resourceGroup, location, Sku=tostring(sku.name), Tier=tostring(sku.tier), tags, Details

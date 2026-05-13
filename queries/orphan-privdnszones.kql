@@ -1,0 +1,5 @@
+resources
+| where type == "microsoft.network/privatednszones"
+| where properties.numberOfVirtualNetworkLinks == 0
+| extend Details = pack_all()
+| project subscriptionId, Resource=id, resourceGroup, location, NumberOfRecordSets=properties.numberOfRecordSets, tags, Details

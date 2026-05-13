@@ -1,0 +1,5 @@
+resources
+| where type == "microsoft.network/loadbalancers"
+| where properties.backendAddressPools == "[]" and properties.inboundNatRules == "[]"
+| extend Details = pack_all()
+| project subscriptionId, Resource=id, resourceGroup, location, Type=tostring(sku.name), tags, Details

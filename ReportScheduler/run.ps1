@@ -4,8 +4,8 @@ param($Timer)
 # CONFIGURATION
 # ================================
 
-$storageAccountName = "stgreportautomation01"
-$blobContainerName  = "reports"
+$storageAccountName = $env:STORAGE_ACCOUNT_NAME
+$blobContainerName  = $env:BLOB_CONTAINER_NAME
 
 $mailSender = "actual@domain.com"
 $mailRecipient = "actual@domain.com"

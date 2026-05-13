@@ -7,8 +7,8 @@ param($Timer)
 $storageAccountName = "stgreportautomation01"
 $blobContainerName  = "reports"
 
-$mailSender = "sumitlad@synergetics-consulting.com"
-$mailRecipient = "sumitlad@synergetics-consulting.com"
+$mailSender = "actual@domain.com"
+$mailRecipient = "actual@domain.com"
 
 # ================================
 # LOG START

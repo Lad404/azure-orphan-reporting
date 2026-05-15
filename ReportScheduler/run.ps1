@@ -44,6 +44,30 @@ try {
     Connect-AzAccount -Identity -ErrorAction Stop
 
     Write-Output "Azure login successful"
+
+# =========================================
+# RUN ONLY ON 2ND AND 4TH SATURDAY
+# =========================================
+
+$today = Get-Date
+
+$weekNumber = [math]::Ceiling($today.Day / 7)
+
+Write-Output "Today: $($today.DayOfWeek)"
+Write-Output "Week Number: $weekNumber"
+
+if (
+    $today.DayOfWeek -ne "Saturday" -or
+    ($weekNumber -ne 2 -and $weekNumber -ne 4)
+) {
+
+    Write-Output "Not 2nd or 4th Saturday. Exiting."
+
+    return
+}
+
+Write-Output "Valid execution window detected. Continuing..."
+
 }
 catch {
 

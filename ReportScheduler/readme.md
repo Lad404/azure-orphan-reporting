@@ -17,14 +17,16 @@ For a `TimerTrigger` to work, you provide a schedule in the form of a [cron expr
 
 This project automates Azure orphan resource reporting using:
 
-- Azure Functions (PowerShell)
-- Azure Resource Graph (ARG)
-- Managed Identity
-- Azure Blob Storage
-- Microsoft Graph API (optional for email)
-- KQL orphan resource queries
+* Azure Functions (PowerShell)
+* Azure Resource Graph (ARG)
+* Managed Identity
+* Azure Blob Storage
+* Microsoft Graph API
+* KQL orphan resource queries
 
-The solution runs on a scheduled Azure Function and generates orphan resource reports in CSV format, uploads them to Azure Blob Storage, and optionally sends them via email.
+The solution runs automatically on a scheduled Azure Function, executes orphan resource queries using Azure Resource Graph, generates clean CSV reports, uploads them to Azure Blob Storage, and sends the reports via email automatically.
+
+This implementation was designed to eliminate manual orphan resource tracking and improve Azure governance visibility.
 
 ---
 
@@ -35,136 +37,491 @@ Azure Function (PowerShell Timer Trigger)
         │
         ├── Managed Identity Authentication
         │
-        ├── Execute ARG KQL Queries
+        ├── Read KQL Query Files
         │
-        ├── Generate CSV Report
+        ├── Execute ARG Queries
+        │
+        ├── Transform Raw ARG Output
+        │
+        ├── Generate Clean CSV Report
         │
         ├── Upload Report to Blob Storage
         │
-        └── Send Email via Graph API (Optional)
+        └── Send Email via Microsoft Graph API
 ```
 
 ---
 
 # Features
 
-- Automated orphan resource discovery
-- Centralized KQL query execution
-- Blob storage archival
-- Timestamped reports
-- Managed Identity authentication
-- No secrets stored in code
-- Production-safe temp storage usage
-- Query failure isolation
-- Detailed logging
+* Automated orphan resource discovery
+* Centralized KQL query execution
+* Clean enterprise-grade CSV formatting
+* Subscription name mapping
+* Resource type extraction
+* Tag formatting
+* Blob storage archival
+* TO and CC email support
+* Managed Identity authentication
+* Microsoft Graph email integration
+* Production-safe temp storage usage
+* Query failure isolation
+* Detailed logging
+
+---
+
+# What are Orphan Resources?
+
+Orphan resources are Azure resources that:
+
+* are unused
+* are disconnected
+* are not attached to workloads
+* increase cloud cost unnecessarily
+* create governance and security risks
+
+Examples:
+
+* Unused NSGs
+* Empty Resource Groups
+* Unused Route Tables
+* Orphan VNets
+* Unused Public IPs
 
 ---
 
 # Folder Structure
 
 ```text
-Azure-Orphan-Reporting/
+AzureReporting/
 │
-├── host.json
-├── requirements.psd1
-├── .gitignore
-│
-├── ReportScheduler/
-│   ├── function.json
-│   └── run.ps1
+├── .vscode/
 │
 ├── queries/
 │   ├── orphan-NSGs.kql
 │   ├── orphan-Vnets.kql
-│   ├── orphan-RouteTables.kql
+│   ├── orphan-routetables.kql
 │   └── ...
+│
+├── ReportScheduler/
+│   ├── function.json
+│   ├── readme.md
+│   └── run.ps1
+│
+├── host.json
+├── requirements.psd1
+├── local.settings.json
+├── profile.ps1
+├── .gitignore
+└── README.md
 ```
 
 ---
 
 # Azure Resources Used
 
-| Resource | Purpose |
-|---|---|
-| Azure Function App | Automation runtime |
-| Storage Account | Blob report storage |
-| Managed Identity | Authentication |
+| Resource             | Purpose                |
+| -------------------- | ---------------------- |
+| Azure Function App   | Automation runtime     |
+| Storage Account      | Blob report storage    |
+| Managed Identity     | Authentication         |
 | Azure Resource Graph | Query orphan resources |
-| Application Insights | Monitoring and logs |
-| Microsoft Graph API | Email notifications |
+| Application Insights | Monitoring and logs    |
+| Microsoft Graph API  | Email notifications    |
 
 ---
 
-# Required RBAC Permissions
+# Step-by-Step Implementation
 
-## Function App Managed Identity
+---
 
-Assign these roles:
+# STEP 1 — Create Storage Account
 
-| Role | Scope |
-|---|---|
-| Reader | Subscription |
-| Resource Graph Reader | Subscription |
+## Why?
+
+Storage Account is required for:
+
+* Azure Function runtime
+* Blob report archival
+
+---
+
+## Actions Performed
+
+Created:
+
+* Azure Storage Account
+
+Created Blob Container:
+
+```text
+reports
+```
+
+Purpose:
+
+* stores generated orphan reports
+
+---
+
+# STEP 2 — Create Azure Function App
+
+## Why?
+
+Azure Function provides:
+
+* serverless execution
+* automatic scheduling
+* PowerShell support
+* low operational overhead
+
+---
+
+## Configuration Used
+
+| Setting | Value            |
+| ------- | ---------------- |
+| Runtime | PowerShell       |
+| OS      | Windows          |
+| Hosting | Consumption Plan |
+
+---
+
+# STEP 3 — Enable Managed Identity
+
+## Why?
+
+Managed Identity allows secure authentication without:
+
+* hardcoded credentials
+* stored passwords
+* secrets in code
+
+---
+
+## Portal Path
+
+```text
+Function App
+→ Identity
+→ System Assigned
+→ Enable
+```
+
+---
+
+# STEP 4 — Assign RBAC Permissions
+
+## Why?
+
+Function requires permissions to:
+
+* read Azure resources
+* upload reports to Blob Storage
+
+---
+
+## Roles Assigned
+
+| Role                          | Scope           |
+| ----------------------------- | --------------- |
+| Reader                        | Subscription    |
 | Storage Blob Data Contributor | Storage Account |
 
 ---
 
-# Function App Settings
+# STEP 5 — Download Orphan Resource Queries
 
-Configure these under:
+## Query Source
 
-```text
-Function App → Environment Variables
-```
+Queries were taken from:
 
-| Name | Example |
-|---|---|
-| STORAGE_ACCOUNT_NAME | stgreportautomation01 |
-| BLOB_CONTAINER_NAME | reports |
-| MAIL_SENDER | alerts@company.com |
-| MAIL_RECIPIENT | client@company.com |
+[Azure Orphan Resources GitHub Repository](https://github.com/dolevshor/azure-orphan-resources?utm_source=chatgpt.com)
 
 ---
 
-# PowerShell Dependencies
+## Why This Repository?
 
-`requirements.psd1`
+This repository provides:
 
-```powershell
-@{
-    'Az.Accounts'      = '4.*'
-    'Az.ResourceGraph' = '1.*'
-    'Az.Storage'       = '8.*'
-}
+* production-ready orphan resource KQL queries
+* validated Azure governance logic
+* community-maintained orphan detection queries
+
+---
+
+## Actions Performed
+
+Downloaded required `.kql` query files and stored them in:
+
+```text
+queries/
+```
+
+folder.
+
+---
+
+# STEP 6 — Create Timer Trigger Function
+
+## Why?
+
+Timer Trigger enables:
+
+* scheduled execution
+* fully automated reporting
+* no manual intervention
+
+---
+
+# Initial Testing Schedule
+
+During testing, the function was configured to run every 5 minutes.
+
+## Cron Used
+
+```json
+"schedule": "0 */5 * * * *"
 ```
 
 ---
 
-# Scheduling
+# Why Every 5 Minutes?
 
-Current schedule:
+This allowed:
 
-```text
-Every Saturday
-```
+* rapid validation
+* faster debugging
+* end-to-end testing
+* immediate email verification
 
-Production recommendation:
+without waiting for weekly schedules.
 
-```text
-2nd and 4th Saturday
-```
+---
 
-Cron example:
+# Production Schedule
+
+Production schedule:
 
 ```json
 "schedule": "0 0 10 * * 6"
 ```
 
+Meaning:
+
+```text
+Every Saturday at 10 AM UTC
+```
+
 ---
 
-# Blob Storage Structure
+# STEP 7 — Implement 2nd and 4th Saturday Logic
 
-Reports are uploaded as:
+## Problem
+
+Azure Function CRON scheduling cannot reliably represent:
+
+```text
+2nd and 4th Saturday
+```
+
+---
+
+## Solution
+
+Implemented scheduling validation directly inside:
+
+```text
+run.ps1
+```
+
+The script:
+
+* runs every Saturday
+* checks current week number
+* exits unless:
+
+  * 2nd Saturday
+  * 4th Saturday
+
+---
+
+## Benefit
+
+Provides:
+
+* reliable scheduling
+* easier maintenance
+* enterprise-friendly scheduling logic
+
+---
+
+# STEP 8 — Implement PowerShell Automation Logic
+
+## Main Script
+
+```text
+ReportScheduler/run.ps1
+```
+
+---
+
+# What the Script Does
+
+The script performs:
+
+1. Azure login using Managed Identity
+2. Reads all `.kql` files
+3. Executes Azure Resource Graph queries
+4. Collects orphan resources
+5. Cleans raw ARG output
+6. Generates clean CSV report
+7. Uploads report to Blob Storage
+8. Sends email using Microsoft Graph API
+
+---
+
+# STEP 9 — Configure Microsoft Graph API
+
+## Why?
+
+Microsoft Graph API is used for:
+
+* secure enterprise email delivery
+* App Registration authentication
+* automation-friendly mail sending
+
+---
+
+# App Registration Creation
+
+Portal Path:
+
+```text
+Microsoft Entra ID
+→ App Registrations
+→ New Registration
+```
+
+---
+
+# STEP 10 — Configure Graph API Permissions
+
+## Initial Problem Faced
+
+Email sending initially failed with:
+
+```text
+403 Forbidden
+ErrorAccessDenied
+```
+
+---
+
+## Root Cause
+
+Configured:
+
+```text
+Delegated Permissions
+```
+
+instead of:
+
+```text
+Application Permissions
+```
+
+---
+
+## Final Correct Permission
+
+| Permission | Type        |
+| ---------- | ----------- |
+| Mail.Send  | Application |
+
+---
+
+## Important Step
+
+Admin consent was granted after adding permissions.
+
+---
+
+# STEP 11 — Configure Function App Environment Variables
+
+## Why?
+
+To avoid:
+
+* hardcoded credentials
+* secrets inside code
+
+---
+
+# Variables Configured
+
+| Variable      | Purpose                    |
+| ------------- | -------------------------- |
+| TENANT_ID     | Azure Tenant ID            |
+| CLIENT_ID     | App Registration Client ID |
+| CLIENT_SECRET | App Registration Secret    |
+| SENDER_EMAIL  | Sender mailbox             |
+| TO_RECIPIENTS | TO recipients              |
+| CC_RECIPIENTS | CC recipients              |
+
+---
+
+# STEP 12 — Implement Clean CSV Formatting
+
+## Initial Problem
+
+Raw Azure Resource Graph output contained:
+
+* ARM payloads
+* JSON blobs
+* unreadable Details column
+
+---
+
+## Solution Implemented
+
+Added:
+
+* subscription name mapping
+* resource type extraction
+* clean tag formatting
+* simplified operational columns
+
+---
+
+# Final CSV Format
+
+| Column        | Description         |
+| ------------- | ------------------- |
+| Subscription  | Subscription Name   |
+| ResourceName  | Resource Name       |
+| ResourceType  | Azure Resource Type |
+| ResourceGroup | Resource Group      |
+| Location      | Azure Region        |
+| Tags          | Resource Tags       |
+
+---
+
+# STEP 13 — Configure Blob Upload
+
+## Why?
+
+Blob Storage provides:
+
+* centralized archival
+* historical reporting
+* easy retrieval
+* low-cost storage
+
+---
+
+# Blob Structure Used
 
 ```text
 reports/yyyy/MM/orphan-report-<timestamp>.csv
@@ -173,21 +530,84 @@ reports/yyyy/MM/orphan-report-<timestamp>.csv
 Example:
 
 ```text
-reports/2026/05/orphan-report-20260513-134500.csv
+reports/2026/05/orphan-report-20260515.csv
 ```
 
 ---
 
-# Logging
+# STEP 14 — Implement Email Notification
 
-Logs are available in:
+## Email Subject
+
+```text
+Azure Orphan Resource Report
+```
+
+---
+
+# Email Body
+
+```text
+Hello Team,
+
+PFA updated orphan resources report.
+
+Regards,
+Synergetics Cloud Team
+```
+
+---
+
+# STEP 15 — Test Full Automation
+
+## Manual Testing Performed
+
+Initially validated:
+
+* Function execution
+* ARG query execution
+* Blob upload
+* email delivery
+
+using:
+
+```text
+Test/Run
+```
+
+inside Azure Functions.
+
+---
+
+# Automated Testing Performed
+
+Then validated actual automation using:
+
+```text
+every 5 minute schedule
+```
+
+This validated:
+
+* timer execution
+* automatic email sending
+* automatic blob uploads
+* automatic report generation
+
+without manual triggering.
+
+---
+
+# Logs Validation
+
+Logs verified from:
 
 ```text
 Function App
 → Monitor
 ```
 
-OR
+and:
 
 ```text
 Application Insights
@@ -198,29 +618,27 @@ Application Insights
 
 # Common Issues Faced During Implementation
 
-## 1. Azure Function Timeout
+---
 
-### Problem
+# 1. Azure Function Timeout
+
+## Problem
 
 ARI + orphan reporting together exceeded Consumption Plan timeout.
 
-Error:
+---
 
-```text
-Timeout value of 00:05:00 exceeded
-```
+## Resolution
 
-### Fix
+Separated ARI implementation from orphan reporting automation.
 
-Separated ARI into a future standalone implementation.
-
-Current Function handles only orphan reporting.
+ARI planned as future standalone implementation.
 
 ---
 
-## 2. Azure Resource Graph Pagination Issue
+# 2. Azure Resource Graph Pagination Issue
 
-### Problem
+## Problem
 
 Used:
 
@@ -234,7 +652,9 @@ ARG supports maximum:
 1000
 ```
 
-### Fix
+---
+
+## Resolution
 
 Reduced query batch size to:
 
@@ -244,27 +664,27 @@ Reduced query batch size to:
 
 ---
 
-## 3. `-Skip 0` Failure in ARG
+# 3. `-Skip 0` Failure in ARG
 
-### Problem
+## Problem
 
-Used:
+Azure Resource Graph rejected:
 
 ```powershell
 -Skip 0
 ```
 
-ARG rejected it.
+---
 
-### Fix
+## Resolution
 
 Removed unnecessary pagination logic.
 
 ---
 
-## 4. Path Issues in Azure Functions
+# 4. Path Issues in Azure Functions
 
-### Problem
+## Problem
 
 Azure Functions intermittently used:
 
@@ -278,29 +698,31 @@ instead of:
 C:\home\site\wwwroot
 ```
 
-### Fix
+---
 
-Used:
+## Resolution
+
+Implemented dynamic paths using:
 
 ```powershell
 $PSScriptRoot
 ```
 
-for dynamic paths.
-
 ---
 
-## 5. Output File Write Failures
+# 5. CSV Write Failures
 
-### Problem
+## Problem
 
-CSV export failed inside:
+CSV generation failed inside:
 
 ```text
 wwwroot
 ```
 
-### Fix
+---
+
+## Resolution
 
 Used:
 
@@ -312,9 +734,9 @@ for runtime-generated files.
 
 ---
 
-## 6. Blob Upload Authorization Failure
+# 6. Blob Upload Authorization Failure
 
-### Problem
+## Problem
 
 Received:
 
@@ -322,7 +744,9 @@ Received:
 403 AuthorizationPermissionMismatch
 ```
 
-### Fix
+---
+
+## Resolution
 
 Assigned:
 
@@ -334,27 +758,23 @@ to Function Managed Identity.
 
 ---
 
-## 7. Duplicate Blob Uploads
+# 7. Duplicate Blob Uploads
 
-### Problem
+## Problem
 
 Multiple executions attempted uploading same blob.
 
-Error:
+---
 
-```text
-A transfer operation with the same source and destination already exists
-```
-
-### Fix
+## Resolution
 
 Implemented timestamp-based filenames.
 
 ---
 
-## 8. Graph API Mail Permission Issues
+# 8. Graph API Mail Permission Issues
 
-### Problem
+## Problem
 
 Received:
 
@@ -362,77 +782,151 @@ Received:
 403 ErrorAccessDenied
 ```
 
-because admin consent was restricted by organization policies.
+---
 
-### Current Status
+## Root Cause
 
-Blob upload works successfully.
-
-Email sending pending organizational approval.
+Configured Delegated permissions instead of Application permissions.
 
 ---
 
-## 9. Empty or Invalid KQL Handling
+## Resolution
 
-### Problem
+Configured:
 
-Single bad query failed entire execution.
+* Mail.Send (Application)
+* Admin Consent
 
-### Fix
+---
 
-Implemented:
-- query isolation
-- try/catch per query
-- skip invalid queries
+# 9. Empty Resource Group and Tags
+
+## Problem
+
+CSV showed blank:
+
+* Resource Group
+* Tags
+
+---
+
+## Root Cause
+
+Incorrect PowerShell property mappings.
+
+---
+
+## Resolution
+
+Updated mappings:
+
+* `resourceGroup`
+* `tags`
+
+---
+
+# 10. Subscription IDs Instead of Names
+
+## Problem
+
+CSV showed subscription GUIDs.
+
+---
+
+## Resolution
+
+Implemented subscription lookup using:
+
+```powershell
+Get-AzSubscription
+```
 
 ---
 
 # Security Best Practices
 
-- No secrets stored in code
-- Managed Identity authentication used
-- Blob uploads via RBAC
-- Environment variables used for configuration
-- Git ignored sensitive files
+* Managed Identity authentication
+* No hardcoded secrets
+* Environment variable configuration
+* RBAC-based access
+* Least privilege model
+* Microsoft Graph Application permissions
 
 ---
 
 # Future Improvements
 
-## Planned ARI Architecture
+## Planned Enhancements
 
-ARI will be implemented separately using:
+### 1. Excel Report Generation
 
-- Azure Function Premium Plan
-OR
-- Azure Container Apps
+Generate:
 
-because ARI is resource-intensive.
+* formatted XLSX
+* filters
+* conditional formatting
+* auto-sized columns
 
----
+using:
 
-# Git Ignore
-
-`.gitignore`
-
-```gitignore
-bin/
-obj/
-.vscode/
-local.settings.json
-outputs/
-*.user
+```text
+ImportExcel
 ```
 
 ---
 
-# Deployment
+### 2. HTML Email Summary
 
-## Publish Function
+Embed orphan resource summary directly in email body.
 
-```powershell
-func azure functionapp publish <function-app-name>
-```
+---
+
+### 3. Cost Estimation
+
+Estimate monthly cost impact of orphan resources.
+
+---
+
+### 4. Severity Classification
+
+Classify resources:
+
+* High
+* Medium
+* Low
+
+based on:
+
+* exposure
+* networking
+* cost impact
+
+---
+
+### 5. ITSM Integrations
+
+Future integrations:
+
+* Microsoft Teams
+* ServiceNow
+* Jira
+
+---
+
+# Current Status
+
+| Component                | Status |
+| ------------------------ | ------ |
+| Managed Identity         | ✅      |
+| ARG Queries              | ✅      |
+| CSV Generation           | ✅      |
+| Blob Upload              | ✅      |
+| Graph Authentication     | ✅      |
+| Email Delivery           | ✅      |
+| TO/CC Recipients         | ✅      |
+| Automated Scheduling     | ✅      |
+| 2nd & 4th Saturday Logic | ✅      |
+| Clean CSV Formatting     | ✅      |
 
 ---
 
@@ -440,30 +934,19 @@ func azure functionapp publish <function-app-name>
 
 ## Azure Orphan Resources
 
-https://github.com/dolevshor/azure-orphan-resources
+[Azure Orphan Resources GitHub Repository](https://github.com/dolevshor/azure-orphan-resources?utm_source=chatgpt.com)
 
-## Azure Resource Inventory (ARI)
+## Azure Resource Graph
 
-https://github.com/microsoft/ARI
+[Azure Resource Graph Documentation](https://learn.microsoft.com/en-us/azure/governance/resource-graph/overview?utm_source=chatgpt.com)
+
+## Microsoft Graph API
+
+[Microsoft Graph API Documentation](https://learn.microsoft.com/en-us/graph/overview?utm_source=chatgpt.com)
 
 ## Azure Functions PowerShell
 
-https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell
-
----
-
-# Current Status
-
-| Component | Status |
-|---|---|
-| Managed Identity | ✅ |
-| ARG Queries | ✅ |
-| CSV Generation | ✅ |
-| Blob Upload | ✅ |
-| Timestamped Reports | ✅ |
-| Query Isolation | ✅ |
-| Email Sending | Admin consent restricted due to org policies|
-| ARI Integration | Planned Separately |
+[Azure Functions PowerShell Guide](https://learn.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell?utm_source=chatgpt.com)
 
 ---
 
@@ -471,4 +954,4 @@ https://learn.microsoft.com/azure/azure-functions/functions-reference-powershell
 
 Sumit Lad
 
----
+Cloud & Azure Automation Engineering

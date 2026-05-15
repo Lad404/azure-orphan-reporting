@@ -4,12 +4,26 @@ param($Timer)
 # CONFIGURATION
 # ================================
 
-$storageAccountName = $env:STORAGE_ACCOUNT_NAME
-$blobContainerName  = $env:BLOB_CONTAINER_NAME
+$storageAccountName = "stgreportautomation01"
+$blobContainerName  = "reports"
 
-$mailSender = "actual@domain.com"
-$mailRecipient = "actual@domain.com"
+# =========================================
+# MAIL CONFIGURATION
+# =========================================
 
+$mailSender = $env:SENDER_EMAIL
+
+$toRecipientsRaw = $env:TO_RECIPIENTS
+
+$ccRecipientsRaw = $env:CC_RECIPIENTS
+
+# App Registration Details
+
+$tenantId = $env:TENANT_ID
+
+$clientId = $env:CLIENT_ID
+
+$clientSecret = $env:CLIENT_SECRET
 # ================================
 # LOG START
 # ================================
@@ -183,20 +197,103 @@ try {
     $orphanCsv = Join-Path $outputPath $csvFileName
     
 
-    if ($allResults.Count -gt 0) {
+if ($allResults.Count -gt 0) {
 
-        $allResults | Export-Csv `
-        -Path $orphanCsv `
-        -NoTypeInformation `
-        -Force `
-        -ErrorAction Stop
+    Write-Output "Formatting clean orphan report..."
 
-        Write-Output "Orphan report exported successfully"
 
-        Write-Output "CSV Path: $orphanCsv"
+# ========================================
+# BUILD SUBSCRIPTION LOOKUP
+# ========================================
 
-        Write-Output "Total orphan resources: $($allResults.Count)"
+Write-Output "Building subscription lookup..."
+
+$subscriptionLookup = @{}
+
+Get-AzSubscription | ForEach-Object {
+
+    $subscriptionLookup[$_.Id] = $_.Name
+}
+
+Write-Output "Subscription lookup completed"
+
+
+$cleanReport = $allResults | ForEach-Object {
+
+    # Extract resource name
+
+    $resourceName = ($_.Resource -split "/")[-1]
+
+    # Extract resource type
+
+    $resourceType = "Unknown"
+
+    if ($_.Resource -match "/providers/") {
+
+        $providerPart = ($_.Resource -split "/providers/")[1]
+
+        $resourceType = (
+            $providerPart -split "/"
+        )[0..1] -join "/"
     }
+
+    # Build clean tag string
+
+    $formattedTags = "NA"
+
+    if ($_.tags) {
+
+        $formattedTags = (
+            $_.tags.PSObject.Properties | ForEach-Object {
+
+                "$($_.Name)=$($_.Value)"
+            }
+        ) -join "; "
+    }
+
+    # Build clean report object
+
+    [PSCustomObject]@{
+
+        Subscription = if (
+                            $subscriptionLookup.ContainsKey($_.subscriptionId)
+                         ) {
+
+                            $subscriptionLookup[$_.subscriptionId]
+                         }
+                         else {
+
+                            $_.subscriptionId
+                         }
+
+        ResourceName  = $resourceName
+
+        ResourceType  = $resourceType
+
+        ResourceGroup = $_.resourceGroup
+
+        Location      = $_.location
+
+        Tags          = $formattedTags
+    }
+}
+
+
+    # Export clean CSV
+
+    $cleanReport | Export-Csv `
+    -Path $orphanCsv `
+    -NoTypeInformation `
+    -Force `
+    -ErrorAction Stop
+
+    Write-Output "Orphan report exported successfully"
+
+    Write-Output "CSV Path: $orphanCsv"
+
+    Write-Output "Total orphan resources: $($cleanReport.Count)"
+}
+
     else {
 
         Write-Warning "No orphan resources found"
@@ -272,10 +369,24 @@ try {
 
     Write-Output "Getting Graph token..."
 
-    $token = (
-        Get-AzAccessToken `
-        -ResourceUrl "https://graph.microsoft.com"
-    ).Token
+    $tokenBody = @{
+
+        client_id     = $clientId
+
+        scope         = "https://graph.microsoft.com/.default"
+
+        client_secret = $clientSecret
+
+        grant_type    = "client_credentials"
+    }
+
+    $tokenResponse = Invoke-RestMethod `
+    -Method POST `
+    -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" `
+    -Body $tokenBody `
+    -ContentType "application/x-www-form-urlencoded"
+
+    $token = $tokenResponse.access_token
 
     Write-Output "Graph token acquired"
 }
@@ -294,30 +405,70 @@ catch {
 
 $emailBody = @{
     message = @{
+
         subject = "Azure Orphan Resource Report"
 
         body = @{
             contentType = "HTML"
 
             content = @"
-<h2>Azure Orphan Resource Report</h2>
+<html>
+<body>
 
-<p>Please find attached the latest orphan resource report.</p>
+<p>Hello Team,</p>
+
+<p>PFA updated orphan resources report.</p>
+
+<p>Regards,<br>
+Synergetics Cloud Team</p>
+
+</body>
+</html>
 "@
         }
 
-        toRecipients = @(
-            @{
-                emailAddress = @{
-                    address = $mailRecipient
-                }
-            }
-        )
+        toRecipients = @()
+
+        ccRecipients = @()
 
         attachments = @()
     }
 
     saveToSentItems = $true
+}
+
+
+# ================================
+# BUILD TO RECIPIENTS
+# ================================
+
+foreach ($email in $toRecipientsRaw.Split(",")) {
+
+    $emailBody.message.toRecipients += @{
+
+        emailAddress = @{
+
+            address = $email.Trim()
+        }
+    }
+}
+
+# ================================
+# BUILD CC RECIPIENTS
+# ================================
+
+if (![string]::IsNullOrWhiteSpace($ccRecipientsRaw)) {
+
+    foreach ($email in $ccRecipientsRaw.Split(",")) {
+
+        $emailBody.message.ccRecipients += @{
+
+            emailAddress = @{
+
+                address = $email.Trim()
+            }
+        }
+    }
 }
 
 # ================================
